@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Receipt Parser</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0a0a0f;
+      --surface:   #111118;
+      --border:    #1e1e2e;
+      --border-hi: #2e2e4e;
+      --accent:    #7c6aff;
+      --accent-dim:#3d3580;
+      --text:      #e8e8f0;
+      --muted:     #6b6b80;
+      --success:   #3ecf8e;
+      --warning:   #f5a623;
+      --error:     #f04438;
+      --radius:    12px;
+      --font:      'Inter', system-ui, -apple-system, sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 14px;
+      line-height: 1.6;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 48px 16px;
+    }
+
+    header {
+      width: 100%;
+      max-width: 860px;
+      margin-bottom: 40px;
+    }
+
+    header h1 {
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: -0.3px;
+      color: var(--text);
+    }
+
+    header p {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 4px;
+    }
+
+    .dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+      margin-right: 8px;
+      vertical-align: middle;
+      box-shadow: 0 0 8px var(--accent);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      width: 100%;
+      max-width: 860px;
+    }
+
+    @media (max-width: 640px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .panel-header span {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--muted);
+    }
+
+    .badge {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 20px;
+      letter-spacing: 0.3px;
+    }
+
+    .badge-neutral { background: var(--border); color: var(--muted); }
+    .badge-success { background: rgba(62,207,142,.12); color: var(--success); }
+    .badge-error   { background: rgba(240,68,56,.12);  color: var(--error); }
+    .badge-warn    { background: rgba(245,166,35,.12); color: var(--warning); }
+
+    textarea {
+      width: 100%;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-size: 12.5px;
+      line-height: 1.7;
+      padding: 16px;
+      resize: none;
+      min-height: 240px;
+    }
+
+    textarea::placeholder { color: var(--muted); }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+    }
+
+    button {
+      cursor: pointer;
+      font-family: var(--font);
+      font-size: 13px;
+      font-weight: 500;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 18px;
+      transition: opacity .15s, transform .1s;
+    }
+
+    button:active { transform: scale(.97); }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+      flex: 1;
+    }
+
+    .btn-primary:hover { opacity: .85; }
+    .btn-primary:disabled { opacity: .35; cursor: not-allowed; }
+
+    .btn-ghost {
+      background: var(--border);
+      color: var(--muted);
+    }
+
+    .btn-ghost:hover { background: var(--border-hi); color: var(--text); }
+
+    .output-body {
+      padding: 16px;
+      min-height: 240px;
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-size: 12px;
+      line-height: 1.7;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .output-body.empty { color: var(--muted); font-style: italic; font-family: var(--font); font-size: 13px; }
+
+    .items-grid {
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .item-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      gap: 12px;
+    }
+
+    .item-name {
+      font-size: 13px;
+      color: var(--text);
+      flex: 1;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .item-amount {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      font-family: 'JetBrains Mono', monospace;
+      white-space: nowrap;
+    }
+
+    .category-pill {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 3px 9px;
+      border-radius: 20px;
+      letter-spacing: 0.3px;
+      white-space: nowrap;
+      text-transform: lowercase;
+    }
+
+    .cat-meals           { background: rgba(245,166,35,.12); color: #f5a623; }
+    .cat-travel          { background: rgba(124,106,255,.12); color: #7c6aff; }
+    .cat-software        { background: rgba(62,207,142,.12);  color: #3ecf8e; }
+    .cat-office_supplies { background: rgba(56,189,248,.12);  color: #38bdf8; }
+    .cat-other           { background: rgba(107,107,128,.12); color: #6b6b80; }
+
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255,255,255,.2);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .6s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 16px;
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .status-bar .timing { margin-left: auto; font-family: monospace; }
+
+    .samples {
+      width: 100%;
+      max-width: 860px;
+      margin-top: 16px;
+    }
+
+    .samples-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .sample-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .chip {
+      font-size: 12px;
+      padding: 5px 12px;
+      border-radius: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      cursor: pointer;
+      transition: border-color .15s, color .15s;
+    }
+
+    .chip:hover { border-color: var(--accent); color: var(--text); }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1><span class="dot"></span>Receipt Parser</h1>
+  <p>Powered by Claude Haiku 4.5 · POST /parse</p>
+</header>
+
+<div class="layout">
+
+  <!-- Input panel -->
+  <div class="panel">
+    <div class="panel-header">
+      <span>Receipt Input</span>
+      <span class="badge badge-neutral" id="charCount">0 chars</span>
+    </div>
+    <textarea id="receiptInput" placeholder="Paste receipt text here…
+
+Example:
+Dinner at The Grand Bistro
+
+Steak Frites         $34.00
+Glass of Merlot      $12.50
+Crème Brûlée          $9.00"></textarea>
+    <div class="actions">
+      <button class="btn-primary" id="parseBtn" onclick="parse()">Parse Receipt</button>
+      <button class="btn-ghost" onclick="clearAll()">Clear</button>
+    </div>
+  </div>
+
+  <!-- Output panel -->
+  <div class="panel">
+    <div class="panel-header">
+      <span>Result</span>
+      <span class="badge badge-neutral" id="statusBadge">idle</span>
+    </div>
+    <div id="outputArea" class="output-body empty">Response will appear here…</div>
+    <div class="status-bar" id="statusBar">
+      <span id="statusMsg">Ready</span>
+      <span class="timing" id="timingMsg"></span>
+    </div>
+  </div>
+
+</div>
+
+<!-- Sample receipts -->
+<div class="samples">
+  <div class="samples-label">Samples</div>
+  <div class="sample-chips">
+    <span class="chip" onclick="loadSample('restaurant')">Restaurant</span>
+    <span class="chip" onclick="loadSample('mixed')">Mixed categories</span>
+    <span class="chip" onclick="loadSample('office')">Office supplies</span>
+    <span class="chip" onclick="loadSample('travel')">Travel</span>
+    <span class="chip" onclick="loadSample('invalid')">Non-receipt text</span>
+  </div>
+</div>
+
+<script>
+  const SAMPLES = {
+    restaurant: `Dinner at The Grand Bistro\n\nSteak Frites         $34.00\nGlass of Merlot      $12.50\nCrème Brûlée          $9.00`,
+    mixed:      `Expense Report\n\nUber to airport       $24.50\nGitHub Pro (annual)    $4.00\nAirport coffee         $6.75`,
+    office:     `Staples\n\nHDMI Cable            $18.99\nNotebook (3-pack)     $11.49\nWhiteboards x2        $34.00\nPrinter paper          $8.49`,
+    travel:     `Business Trip - Chicago\n\nFlight ORD-JFK       $320.00\nHotel (2 nights)     $240.00\nTaxi to hotel         $31.00\nAirport lunch         $14.50`,
+    invalid:    `This is not a receipt. Just some random paragraph text with no prices or items.`,
+  };
+
+  const input = document.getElementById('receiptInput');
+  const parseBtn = document.getElementById('parseBtn');
+  const outputArea = document.getElementById('outputArea');
+  const statusBadge = document.getElementById('statusBadge');
+  const statusMsg = document.getElementById('statusMsg');
+  const timingMsg = document.getElementById('timingMsg');
+  const charCount = document.getElementById('charCount');
+
+  input.addEventListener('input', () => {
+    charCount.textContent = input.value.length + ' chars';
+  });
+
+  function loadSample(key) {
+    input.value = SAMPLES[key];
+    charCount.textContent = input.value.length + ' chars';
+  }
+
+  function clearAll() {
+    input.value = '';
+    charCount.textContent = '0 chars';
+    outputArea.className = 'output-body empty';
+    outputArea.textContent = 'Response will appear here…';
+    statusBadge.className = 'badge badge-neutral';
+    statusBadge.textContent = 'idle';
+    statusMsg.textContent = 'Ready';
+    timingMsg.textContent = '';
+  }
+
+  function setStatus(type, label, msg, timing) {
+    statusBadge.className = `badge badge-${type}`;
+    statusBadge.textContent = label;
+    statusMsg.textContent = msg;
+    timingMsg.textContent = timing || '';
+  }
+
+  function categoryClass(cat) {
+    return 'cat-' + (cat || 'other').replace(/\s+/g, '_');
+  }
+
+  function renderItems(items) {
+    if (!items || items.length === 0) {
+      outputArea.className = 'output-body empty';
+      outputArea.innerHTML = 'No items found.';
+      return;
+    }
+    outputArea.className = '';
+    outputArea.style.padding = '0';
+    const grid = document.createElement('div');
+    grid.className = 'items-grid';
+    items.forEach(({ item, amount, category }) => {
+      const row = document.createElement('div');
+      row.className = 'item-row';
+      row.innerHTML = `
+        <span class="item-name">${escHtml(item)}</span>
+        <span class="item-amount">$${Number(amount).toFixed(2)}</span>
+        <span class="category-pill ${categoryClass(category)}">${escHtml(category)}</span>
+      `;
+      grid.appendChild(row);
+    });
+    outputArea.innerHTML = '';
+    outputArea.appendChild(grid);
+  }
+
+  function renderError(data) {
+    outputArea.className = 'output-body';
+    outputArea.style.padding = '16px';
+    outputArea.textContent = JSON.stringify(data, null, 2);
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  async function parse() {
+    const text = input.value.trim();
+    if (!text) return;
+
+    parseBtn.disabled = true;
+    parseBtn.innerHTML = '<span class="spinner"></span>Parsing…';
+    outputArea.className = 'output-body empty';
+    outputArea.style.padding = '';
+    outputArea.textContent = '';
+    setStatus('neutral', 'loading', 'Sending to Claude…', '');
+
+    const t0 = Date.now();
+
+    try {
+      const res = await fetch('http://localhost:8000/parse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ receipt_text: text }),
+      });
+
+      const elapsed = ((Date.now() - t0) / 1000).toFixed(2) + 's';
+      const data = await res.json();
+
+      if (res.ok && data.items !== undefined) {
+        setStatus('success', `${res.status} OK`, `${data.items.length} item${data.items.length !== 1 ? 's' : ''} parsed`, elapsed);
+        renderItems(data.items);
+      } else {
+        setStatus('error', `${res.status}`, data.error || 'Error', elapsed);
+        renderError(data);
+      }
+    } catch (err) {
+      const elapsed = ((Date.now() - t0) / 1000).toFixed(2) + 's';
+      setStatus('error', 'network', 'Could not reach localhost:8000', elapsed);
+      outputArea.className = 'output-body';
+      outputArea.style.padding = '16px';
+      outputArea.textContent = 'Network error: ' + err.message + '\n\nMake sure the server is running:\nuvicorn scaffold:app --port 8000';
+    } finally {
+      parseBtn.disabled = false;
+      parseBtn.textContent = 'Parse Receipt';
+    }
+  }
+
+  document.addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') parse();
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,113 @@
+{
+  "scenario": "Happy path — 3-item restaurant receipt",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8000/parse",
+    "body": {
+      "receipt_text": "Dinner at The Grand Bistro\n\nSteak Frites         $34.00\nGlass of Merlot      $12.50\nCrème Brûlée          $9.00\n\nSubtotal: $55.50\nTax (8%):  $4.44\nTotal:    $59.94"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "items": [
+        { "item": "Steak Frites",  "amount": 34.0,  "category": "meals" },
+        { "item": "Glass of Merlot", "amount": 12.5, "category": "meals" },
+        { "item": "Crème Brûlée",  "amount": 9.0,   "category": "meals" }
+      ]
+    }
+  },
+  "logs": [
+    "2026-06-11 10:14:02,341 [INFO]  Anthropic client initialised successfully",
+    "2026-06-11 10:14:05,812 [INFO]  Claude request (attempt 1) — 1 message(s), last role=user",
+    "2026-06-11 10:14:07,203 [INFO]  Claude response (attempt 1) — 187 chars: {\"items\": [{\"item\": \"Steak Frites\", \"amount\": 34.0, \"category\": \"meals\"}, {\"item\": \"Glass of Merlot\", \"amount\": 12.5, \"category\": \"meals\"}, {\"item\": \"Crèm...",
+    "2026-06-11 10:14:07,204 [INFO]  Validation PASSED (attempt 1) — 3 item(s)"
+  ],
+  "validation": "PASSED on attempt 1"
+},
+{
+  "scenario": "Retry path — Claude wraps response in markdown code fence",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8000/parse",
+    "body": {
+      "receipt_text": "Office supply run\n\nStaples notebook   $4.99\nUSB-C hub         $29.99\nPrinter paper      $8.49"
+    }
+  },
+  "attempt_1": {
+    "claude_raw_response": "```json\n{\"items\": [{\"item\": \"Staples notebook\", \"amount\": 4.99, \"category\": \"office_supplies\"}, {\"item\": \"USB-C hub\", \"amount\": 29.99, \"category\": \"office_supplies\"}, {\"item\": \"Printer paper\", \"amount\": 8.49, \"category\": \"office_supplies\"}]}\n```",
+    "after_fence_strip": "{\"items\": [{\"item\": \"Staples notebook\", \"amount\": 4.99, \"category\": \"office_supplies\"}, {\"item\": \"USB-C hub\", \"amount\": 29.99, \"category\": \"office_supplies\"}, {\"item\": \"Printer paper\", \"amount\": 8.49, \"category\": \"office_supplies\"}]}",
+    "validation": "PASSED — fence stripping resolved the issue before a retry was needed"
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "items": [
+        { "item": "Staples notebook", "amount": 4.99,  "category": "office_supplies" },
+        { "item": "USB-C hub",        "amount": 29.99, "category": "office_supplies" },
+        { "item": "Printer paper",    "amount": 8.49,  "category": "office_supplies" }
+      ]
+    }
+  },
+  "logs": [
+    "2026-06-11 10:15:01,100 [INFO]  Claude request (attempt 1) — 1 message(s), last role=user",
+    "2026-06-11 10:15:02,740 [INFO]  Claude response (attempt 1) — 229 chars: ```json\n{\"items\": [{\"item\": \"Staples notebook\"...",
+    "2026-06-11 10:15:02,741 [INFO]  Validation PASSED (attempt 1) — 3 item(s)"
+  ]
+},
+{
+  "scenario": "Auth failure — invalid API key",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8000/parse",
+    "body": {
+      "receipt_text": "Any receipt text"
+    }
+  },
+  "response": {
+    "status": 401,
+    "body": {
+      "error": "auth_failed",
+      "detail": "Invalid or missing ANTHROPIC_API_KEY."
+    }
+  },
+  "logs": [
+    "2026-06-11 10:16:00,500 [ERROR] Authentication error on attempt 1: Error code: 401 ..."
+  ]
+},
+{
+  "scenario": "Both attempts fail — parse_failed error",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8000/parse",
+    "body": {
+      "receipt_text": "This is not a receipt at all. Just some random text."
+    }
+  },
+  "attempt_1": {
+    "claude_raw_response": "I'm sorry, I cannot find any line items in this text.",
+    "validation_error": "json.JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
+  },
+  "attempt_2": {
+    "claude_raw_response": "{\"items\": []}",
+    "validation_error": "ValidationError: items list is empty — no ReceiptItem objects"
+  },
+  "response": {
+    "status": 422,
+    "body": {
+      "error": "parse_failed",
+      "detail": "1 validation error for ParsedReceipt\nitems\n  List should have at least 1 item after validation, not 0",
+      "raw_response": "{\"items\": []}"
+    }
+  },
+  "logs": [
+    "2026-06-11 10:17:01,200 [INFO]  Claude request (attempt 1) — 1 message(s), last role=user",
+    "2026-06-11 10:17:02,800 [INFO]  Claude response (attempt 1) — 54 chars: I'm sorry, I cannot find any line items in this text.",
+    "2026-06-11 10:17:02,801 [WARNING] Validation FAILED (attempt 1): Expecting value: line 1 column 1 (char 0)",
+    "2026-06-11 10:17:02,801 [INFO]  Retrying — sending bad response back to Claude for correction",
+    "2026-06-11 10:17:02,802 [INFO]  Claude request (attempt 2) — 3 message(s), last role=user",
+    "2026-06-11 10:17:04,100 [INFO]  Claude response (attempt 2) — 13 chars: {\"items\": []}",
+    "2026-06-11 10:17:04,101 [WARNING] Validation FAILED (attempt 2): ...",
+    "2026-06-11 10:17:04,101 [ERROR]  All attempts exhausted. Returning parse_failed error."
+  ]
+}
